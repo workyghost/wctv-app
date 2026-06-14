@@ -17,7 +17,8 @@ import {
   Menu
 } from 'lucide-react';
 
-// Version 1.2.0 - Premium Minimalist IPTV Dashboard
+// Version 1.3.0 - Premium Minimalist IPTV Dashboard
+const APP_VERSION = "1.3.0";
 const APP_GUID = "ed3904e8-737b-4a5e-856a-1b0d7a0a94e2";
 
 // Helper to generate a dynamic 12-char alphanumeric session ID
@@ -176,6 +177,8 @@ function App() {
 
     let blobUrl = '';
     const sid = generateRandomSid();
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const proxyBase = `${origin}/trt-proxy`;
 
     if (activeChannel.isDynamic) {
       // Create virtual master playlist Blob to support Adaptive Bitrate
@@ -485,7 +488,7 @@ function App() {
             <Tv size={20} color="white" />
           </div>
           <div>
-            <h1 className="logo-title">WCTV IPTV</h1>
+            <h1 className="logo-title">WCTV IPTV <span style={{ fontSize: '10px', opacity: 0.6, verticalAlign: 'super' }}>v{APP_VERSION}</span></h1>
             <div className="logo-subtitle">2K CANLI YAYIN</div>
           </div>
         </div>
