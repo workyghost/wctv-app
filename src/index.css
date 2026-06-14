@@ -1280,13 +1280,9 @@ body {
   height: 100% !important;
 }
 
-/* Immersive Landscape Fullscreen HUD Tweaks */
+/* Hide HUD overlay entirely in landscape fullscreen on mobile */
 .player-wrapper.mobile-landscape-fullscreen .hud-overlay {
-  top: 12px;
-  right: 12px;
-  background: rgba(19, 19, 19, 0.75);
-  padding: 8px 12px;
-  font-size: 10px;
+  display: none !important;
 }
 
 /* Mobile responsive sidebar drawer & layout overrides */
@@ -1355,6 +1351,10 @@ body {
 
   .header-right .alert-box {
     display: none !important; /* Hide alert box on header to save horizontal room */
+  }
+
+  .hud-overlay {
+    display: none !important; /* Hide HUD entirely on mobile to prevent overlaying the video */
   }
 
   .controls-container {

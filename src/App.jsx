@@ -304,8 +304,13 @@ function App() {
         discovered.sort((a, b) => b.height - a.height);
         setAvailableLevels(discovered);
 
+        videoRef.current.muted = false; // Start unmuted
         videoRef.current.play().catch(err => {
-          console.log('Autoplay blocked, waiting for user gesture:', err);
+          console.log('Unmuted autoplay blocked, trying muted autoplay...', err);
+          videoRef.current.muted = true;
+          videoRef.current.play().catch(err2 => {
+            console.log('Muted autoplay also blocked:', err2);
+          });
         });
         
         setHudData(prev => ({ ...prev, status: 'Aktif' }));
@@ -337,8 +342,13 @@ function App() {
         : activeChannel.url;
 
       videoRef.current.src = nativeStreamUrl;
+      videoRef.current.muted = false; // Start unmuted
       videoRef.current.addEventListener('loadedmetadata', () => {
-        videoRef.current.play().catch(e => console.log('Autoplay blocked:', e));
+        videoRef.current.play().catch(e => {
+          console.log('Unmuted Safari autoplay blocked, trying muted...', e);
+          videoRef.current.muted = true;
+          videoRef.current.play().catch(err2 => console.log('Muted autoplay blocked:', err2));
+        });
         setHudData(prev => ({ 
           ...prev, 
           status: 'Aktif (Safari Native)', 
@@ -651,7 +661,6 @@ function App() {
             className="video-element"
             controls
             autoPlay
-            muted
             playsInline
           />
           
