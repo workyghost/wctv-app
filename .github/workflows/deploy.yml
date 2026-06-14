@@ -12,7 +12,7 @@ jobs:
       - name: Trigger Webhook (Domain HTTPS)
         run: |
           echo "Triggering deploy via domain HTTPS..."
-          curl -i -X POST "https://workyghost.com/api/deploy/bvMvWy-zMeobe-_JpCwAE"
+          curl -i -X POST "https://dokploy.workyghost.com/api/deploy/bvMvWy-zMeobe-_JpCwAE"
       - name: Trigger Webhook (IP Port 3000)
         run: |
           echo "Triggering deploy via IP and Port 3000..."

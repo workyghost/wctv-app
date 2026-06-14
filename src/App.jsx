@@ -16,7 +16,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-// Version 1.1.3 - Webhook Token Update
+// Version 1.1.4 - Correct Domain Routing
 const APP_GUID = "ed3904e8-737b-4a5e-856a-1b0d7a0a94e2";
 
 // Helper to generate a dynamic 12-char alphanumeric session ID
