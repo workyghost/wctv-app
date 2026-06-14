@@ -204,7 +204,7 @@ function App() {
     if (Hls.isSupported()) {
       // Tune Hls.js parameters based on selected latency/buffer mode
       let hlsConfig = {
-        enableWorker: true,
+        enableWorker: false,
         lowLatencyMode: latencyMode === 'low',
         backBufferLength: 90,
         capLevelToPlayerSize: false
@@ -212,25 +212,22 @@ function App() {
 
       if (latencyMode === 'low') {
         // Ultra-low latency parameters
-        hlsConfig.liveSyncDuration = 5;
-        hlsConfig.liveMaxLatencyDuration = 10;
+        hlsConfig.liveSyncDurationCount = 2;
         hlsConfig.maxBufferLength = 10;
       } else if (latencyMode === 'balanced') {
         // Balanced (Recommended for high quality live sports without buffering)
-        hlsConfig.liveSyncDuration = 15;
-        hlsConfig.liveMaxLatencyDuration = 25;
+        hlsConfig.liveSyncDurationCount = 3;
         hlsConfig.maxBufferLength = 35;
       } else {
         // Safe buffer mode (extremely stable, IPTV stream style)
-        hlsConfig.liveSyncDuration = 30;
-        hlsConfig.liveMaxLatencyDuration = 50;
+        hlsConfig.liveSyncDurationCount = 5;
         hlsConfig.maxBufferLength = 60;
       }
 
       const hls = new Hls(hlsConfig);
       hlsRef.current = hls;
-      hls.loadSource(streamUrl);
       hls.attachMedia(videoRef.current);
+      hls.loadSource(streamUrl);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         // Discover available quality levels from virtual master playlist
