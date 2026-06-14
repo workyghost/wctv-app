@@ -12,7 +12,8 @@ import {
   Sliders, 
   AlertTriangle,
   Clock,
-  Gauge
+  Gauge,
+  RefreshCw
 } from 'lucide-react';
 
 const APP_GUID = "ed3904e8-737b-4a5e-856a-1b0d7a0a94e2";
@@ -156,6 +157,22 @@ function App() {
   const hlsRef = useRef(null);
   const diagnosticsIntervalRef = useRef(null);
 
+  // Auto-healing and self-ping states
+  const [autoHealingEnabled, setAutoHealingEnabled] = useState(true);
+  const [pingLatency, setPingLatency] = useState(null);
+  const [pingStatus, setPingStatus] = useState('healthy'); // 'healthy', 'checking', 'error', 'disabled'
+  const [reloadCount, setReloadCount] = useState(0);
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+
+  const lastTimeRef = useRef(0);
+  const stallCountRef = useRef(0);
+  const autoHealingEnabledRef = useRef(true);
+
+  // Sync auto-healing toggle ref to avoid restarting the player on settings change
+  useEffect(() => {
+    autoHealingEnabledRef.current = autoHealingEnabled;
+  }, [autoHealingEnabled]);
+
   // Save channels to local storage
   useEffect(() => {
     localStorage.setItem('aether_channels', JSON.stringify(channels));
@@ -275,58 +292,6 @@ function App() {
         }
       });
 
-      // Periodic diagnostics collection
-      diagnosticsIntervalRef.current = setInterval(() => {
-        if (!videoRef.current) return;
-        
-        let bufferLength = 0;
-        const video = videoRef.current;
-        if (video.buffered.length > 0) {
-          const currentTime = video.currentTime;
-          for (let i = 0; i < video.buffered.length; i++) {
-            if (currentTime >= video.buffered.start(i) && currentTime <= video.buffered.end(i)) {
-              bufferLength = video.buffered.end(i) - currentTime;
-              break;
-            }
-          }
-        }
-
-        // Get video track resolution
-        const resolution = video.videoWidth && video.videoHeight 
-          ? `${video.videoWidth}x${video.videoHeight}` 
-          : 'N/A';
-
-        // Calculate current bitrate estimation
-        let bitrate = 'N/A';
-        const currentLvl = hls.currentLevel;
-        if (currentLvl !== -1 && hls.levels[currentLvl]) {
-          const levelInfo = hls.levels[currentLvl];
-          bitrate = `${(levelInfo.bitrate / 1000000).toFixed(2)} Mbps`;
-        }
-
-        // Calculate dropped frames details
-        let fps = 0;
-        let droppedFrames = 0;
-        if (video.getVideoPlaybackQuality) {
-          const quality = video.getVideoPlaybackQuality();
-          fps = quality.totalVideoFrames > 0 ? Math.round(quality.totalVideoFrames / video.currentTime) : 0;
-          droppedFrames = quality.droppedVideoFrames;
-        }
-
-        const modeLabels = { low: 'Ultra Düşük Gecikme', balanced: 'Dengeli', stable: 'Süper Stabil' };
-
-        setHudData({
-          status: 'Aktif',
-          resolution,
-          bitrate,
-          buffer: `${bufferLength.toFixed(1)}s`,
-          fps: isNaN(fps) || fps > 120 ? 60 : fps,
-          droppedFrames,
-          latencyModeName: modeLabels[latencyMode],
-          isError: false
-        });
-      }, 1000);
-
     } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
       // Native HLS support (mostly Safari)
       videoRef.current.src = streamUrl;
@@ -344,6 +309,124 @@ function App() {
       });
     }
 
+    // Periodic diagnostics & self-ping collection (Runs for both Hls.js and Native player)
+    let tickCount = 0;
+    lastTimeRef.current = 0;
+    stallCountRef.current = 0;
+
+    diagnosticsIntervalRef.current = setInterval(() => {
+      if (!videoRef.current) return;
+      const video = videoRef.current;
+      tickCount++;
+
+      // 1. STALL & AUTO-HEAL CHECK (every second)
+      // Check if video is playing (i.e. is not paused, not ended, and has readyState >= 2)
+      if (video.readyState >= 2 && !video.paused && !video.ended) {
+        if (video.currentTime === lastTimeRef.current) {
+          stallCountRef.current += 1;
+          
+          if (autoHealingEnabledRef.current && stallCountRef.current >= 12) {
+            console.log('[Stream Monitor] Stall limit reached (12s). Initiating Auto-Heal...');
+            showToast('Yayın donması algılandı! Donma koruması yayını otomatik olarak tazeliyor...');
+            setReloadCount(r => r + 1);
+            setReloadTrigger(t => t + 1);
+            stallCountRef.current = 0;
+            return;
+          }
+        } else {
+          lastTimeRef.current = video.currentTime;
+          stallCountRef.current = 0;
+        }
+      } else {
+        // Reset stall counter if paused, ended, or not ready
+        stallCountRef.current = 0;
+        lastTimeRef.current = video.currentTime;
+      }
+
+      // 2. SELF-PING CONNECTION CHECK (every 8 seconds)
+      if (tickCount % 8 === 0) {
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        const proxyBase = `${origin}/trt-proxy`;
+        const pingUrl = activeChannel.isDynamic
+          ? `${proxyBase}/${activeChannel.channelKey}/master_1080p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2`
+          : activeChannel.url;
+
+        setPingStatus('checking');
+        const startTime = performance.now();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+        fetch(pingUrl, { method: 'HEAD', mode: 'no-cors', signal: controller.signal })
+          .then(() => {
+            clearTimeout(timeoutId);
+            const duration = Math.round(performance.now() - startTime);
+            setPingLatency(duration);
+            setPingStatus('healthy');
+          })
+          .catch((err) => {
+            clearTimeout(timeoutId);
+            console.warn('[Stream Monitor] Ping check failed:', err);
+            setPingLatency(null);
+            setPingStatus('error');
+
+            // Fast-track auto-heal if ping fails AND we are already seeing some stall (>= 5s)
+            if (autoHealingEnabledRef.current && stallCountRef.current >= 5) {
+              console.log('[Stream Monitor] Network check failed and stall active. Triggering fast Auto-Heal...');
+              showToast('Bağlantı kesintisi ve donma algılandı! Yayın otomatik yenileniyor...');
+              setReloadCount(r => r + 1);
+              setReloadTrigger(t => t + 1);
+              stallCountRef.current = 0;
+            }
+          });
+      }
+
+      // 3. REGULAR HUD DIAGNOSTICS UPDATE (every second)
+      let bufferLength = 0;
+      if (video.buffered.length > 0) {
+        const currentTime = video.currentTime;
+        for (let i = 0; i < video.buffered.length; i++) {
+          if (currentTime >= video.buffered.start(i) && currentTime <= video.buffered.end(i)) {
+            bufferLength = video.buffered.end(i) - currentTime;
+            break;
+          }
+        }
+      }
+
+      const resolution = video.videoWidth && video.videoHeight 
+        ? `${video.videoWidth}x${video.videoHeight}` 
+        : 'N/A';
+
+      let bitrate = 'N/A';
+      if (hlsRef.current) {
+        const currentLvl = hlsRef.current.currentLevel;
+        if (currentLvl !== -1 && hlsRef.current.levels[currentLvl]) {
+          const levelInfo = hlsRef.current.levels[currentLvl];
+          bitrate = `${(levelInfo.bitrate / 1000000).toFixed(2)} Mbps`;
+        }
+      }
+
+      let fps = 0;
+      let droppedFrames = 0;
+      if (video.getVideoPlaybackQuality) {
+        const quality = video.getVideoPlaybackQuality();
+        fps = quality.totalVideoFrames > 0 ? Math.round(quality.totalVideoFrames / video.currentTime) : 0;
+        droppedFrames = quality.droppedVideoFrames;
+      }
+
+      const modeLabels = { low: 'Ultra Düşük Gecikme', balanced: 'Dengeli', stable: 'Süper Stabil' };
+
+      setHudData(prev => ({
+        status: hlsRef.current ? 'Aktif' : 'Aktif (Safari Native)',
+        resolution,
+        bitrate,
+        buffer: `${bufferLength.toFixed(1)}s`,
+        fps: isNaN(fps) || fps > 120 ? 60 : fps,
+        droppedFrames,
+        latencyModeName: modeLabels[latencyMode] || 'Bilinmiyor',
+        isError: prev.isError
+      }));
+    }, 1000);
+
     return () => {
       if (hlsRef.current) {
         hlsRef.current.destroy();
@@ -356,7 +439,7 @@ function App() {
         URL.revokeObjectURL(blobUrl);
       }
     };
-  }, [activeChannelId, latencyMode]);
+  }, [activeChannelId, latencyMode, reloadTrigger]);
 
   // Adjust quality level override
   const handleQualityChange = (levelIdx) => {
@@ -518,9 +601,13 @@ function App() {
             </div>
           </div>
           <div>
-            <div className="alert-box">
+            <div className="alert-box flex-align-center">
               <ShieldCheck className="alert-icon" size={16} />
               <span>Sanal Master Playlist & Donma Önleyici aktif.</span>
+              <span className={`header-ping-badge ${pingStatus}`}>
+                <span className="ping-badge-dot"></span>
+                <span>{pingStatus === 'healthy' ? `${pingLatency} ms` : pingStatus === 'checking' ? 'Ölçülüyor...' : 'Kesinti'}</span>
+              </span>
             </div>
           </div>
         </header>
@@ -532,6 +619,7 @@ function App() {
             className="video-element"
             controls
             autoPlay
+            muted
             playsInline
           />
           
@@ -561,6 +649,14 @@ function App() {
             <div className="hud-item">
               <span className="hud-label">FPS/Gecikme:</span>
               <span className="hud-value">{hudData.fps} FPS ({hudData.latencyModeName})</span>
+            </div>
+            <div className="hud-item">
+              <span className="hud-label">Ping / Kurtarma:</span>
+              <span className="hud-value" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span className={`hud-status-dot ${pingStatus}`}></span>
+                {pingStatus === 'healthy' ? `${pingLatency} ms` : pingStatus === 'checking' ? 'Ölçülüyor' : 'Kesinti'} 
+                {reloadCount > 0 && ` (${reloadCount}x Kurtarıldı)`}
+              </span>
             </div>
           </div>
         </div>
@@ -652,6 +748,81 @@ function App() {
                   <strong> Dengeli</strong> veya <strong> Süper Stabil</strong> mod kullanılması şiddetle tavsiye edilir.
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* Self-Healing & Ping Monitor Card */}
+          <div className="control-card">
+            <h3 className="card-title">
+              <Activity size={18} className="primary-color" style={{ animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }} />
+              Donma Koruması & Bağlantı
+            </h3>
+            
+            <div className="self-healing-stats">
+              <div className="status-item">
+                <span className="status-label">Bağlantı Gecikmesi:</span>
+                <span className="status-value-group">
+                  <span className={`ping-indicator-dot ${pingStatus}`}></span>
+                  <span className="status-val font-mono">
+                    {pingStatus === 'healthy' 
+                      ? `${pingLatency} ms` 
+                      : pingStatus === 'checking' 
+                      ? 'Ölçülüyor...' 
+                      : pingStatus === 'error'
+                      ? 'Bağlantı Sorunu'
+                      : 'Pasif'}
+                  </span>
+                </span>
+              </div>
+              <div className="status-item">
+                <span className="status-label">Donma Koruması:</span>
+                <span className="status-val" style={{ color: autoHealingEnabled ? '#10b981' : '#af8782', fontWeight: 600 }}>
+                  {autoHealingEnabled ? 'Aktif (Otomatik)' : 'Pasif'}
+                </span>
+              </div>
+              <div className="status-item">
+                <span className="status-label">Otomatik Kurtarma:</span>
+                <span className="status-val" style={{ fontWeight: 600 }}>
+                  {reloadCount > 0 ? (
+                    <span className="reload-badge danger">{reloadCount} Kez Kurtarıldı</span>
+                  ) : (
+                    <span className="reload-badge success">Sorunsuz Çalışma</span>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="self-healing-actions">
+              <button 
+                type="button"
+                className={`action-btn-toggle ${autoHealingEnabled ? 'active' : ''}`}
+                onClick={() => {
+                  setAutoHealingEnabled(!autoHealingEnabled);
+                  showToast(autoHealingEnabled ? 'Otomatik donma koruması devre dışı bırakıldı.' : 'Otomatik donma koruması aktif hale getirildi.');
+                }}
+              >
+                {autoHealingEnabled ? 'Korumayı Durdur' : 'Korumayı Başlat'}
+              </button>
+
+              <button 
+                type="button"
+                className="action-btn-reconnect"
+                onClick={() => {
+                  showToast('Yayın bağlantısı manuel olarak tazeleniyor...');
+                  setReloadTrigger(t => t + 1);
+                }}
+                title="Yeni bir oturum açarak yayını yeniden başlatır"
+              >
+                <RefreshCw size={13} className="reconnect-icon" />
+                Yeniden Bağlan
+              </button>
+            </div>
+            
+            <div className="alert-box" style={{ marginTop: '14px', background: 'rgba(227, 10, 23, 0.04)', borderColor: 'rgba(227, 10, 23, 0.15)' }}>
+              <ShieldCheck className="alert-icon animate-pulse" size={16} />
+              <span style={{ fontSize: '12.5px', lineHeight: '1.4' }}>
+                Yayın donarsa oynatıcı arka planda yeni bir <strong>sid (Oturum ID)</strong> üreterek yayını 10-12 saniye içinde otomatik kurtarır.
+              </span>
             </div>
           </div>
         </div>
