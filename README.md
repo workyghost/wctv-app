@@ -10,7 +10,7 @@ WCTV is a premium, high-performance IPTV web client built with React and Vite. I
 2. **Periyodik Bağlantı Kontrolü (Self-Ping)**: Background worker pings the remote manifest every 8 seconds to measure network latency. If a ping failure coincides with a minor buffer stall (>= 5s), it fast-tracks the auto-healing sequence.
 3. **Adaptive Bitrate (ABR) Virtual Playlist**: Generates virtual master playlists on the fly for TRT channels, exposing multiple streams (2K, 1080p, 720p, 480p, 360p) for dynamic stream quality switching.
 4. **Latency Modes**: Low Latency (5s buffer), Balanced (15s buffer - Recommended), and Super Stable (30s buffer) playback modes.
-5. **Autoplay Ready (Unmuted)**: Configured to autoplay instantly with audio enabled (unmuted) by default.
+5. **Autoplay Ready**: Fully configured to autoplay instantly upon loading in any modern browser by utilising standard muted autoplay fallback guidelines.
 
 ---
 
@@ -62,10 +62,10 @@ To check the connection health without disrupting video transmission:
 ---
 
 ## 🌐 Autoplay Guidelines & Policies
-To provide a premium experience where the stream starts playing immediately with sound enabled (unmuted) by default:
-1. The `<video>` tag is marked with `autoPlay` and is **unmuted** by default.
-2. Hls.js loads the source and attempts to play.
-3. Note: In some modern browsers, unmuted autoplay policies might require a user interaction (like a click anywhere on the page) to initiate audio. The player catches this gracefully and awaits user gesture to start, or plays with full audio as soon as a gesture is registered.
+Modern browsers block autoplaying video elements that contain audio. To guarantee **zero-interaction automatic playback**:
+1. The `<video>` tag is marked with both `autoPlay` and `muted`.
+2. Hls.js loads the source and plays immediately.
+3. Users can unmute the stream at any time using the native player controls.
 
 ---
 
