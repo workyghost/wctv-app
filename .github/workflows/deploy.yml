@@ -12,8 +12,8 @@ jobs:
       - name: Trigger Webhook (Domain HTTPS)
         run: |
           echo "Triggering deploy via domain HTTPS..."
-          curl -i -X POST "https://workyghost.com/api/deploy/nhdGNM7R32nJ-RmdEPpJI"
+          curl -i -X POST "https://workyghost.com/api/deploy/bvMvWy-zMeobe-_JpCwAE"
       - name: Trigger Webhook (IP Port 3000)
         run: |
           echo "Triggering deploy via IP and Port 3000..."
-          curl -i --max-time 10 -X POST "http://13.140.143.25:3000/api/deploy/nhdGNM7R32nJ-RmdEPpJI" || true
+          curl -i --max-time 10 -X POST "http://13.140.143.25:3000/api/deploy/bvMvWy-zMeobe-_JpCwAE" || true
