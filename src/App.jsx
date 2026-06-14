@@ -68,31 +68,32 @@ const PRESET_CHANNELS = [
 
 // Generates virtual master playlist containing all resolutions for ABR
 const getVirtualMasterPlaylist = (channel, sid) => {
+  const proxyBase = '/trt-proxy';
   if (channel.channelKey === 'trt-1') {
     return `#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=2560x1440,NAME="1440p"
-https://trt.daioncdn.net/trt-1/master_1440p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/trt-1/master_1440p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080,NAME="1080p"
-https://trt.daioncdn.net/trt-1/master_1080p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/trt-1/master_1080p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720,NAME="720p"
-https://trt.daioncdn.net/trt-1/master_720p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/trt-1/master_720p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=854x480,NAME="480p"
-https://trt.daioncdn.net/trt-1/master_480p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/trt-1/master_480p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,NAME="360p"
-https://trt.daioncdn.net/trt-1/master_360p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2`;
+${proxyBase}/trt-1/master_360p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2`;
   } else {
     // Other TRT channels typically cap at 1080p
     return `#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080,NAME="1080p"
-https://trt.daioncdn.net/${channel.channelKey}/master_1080p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/${channel.channelKey}/master_1080p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720,NAME="720p"
-https://trt.daioncdn.net/${channel.channelKey}/master_720p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/${channel.channelKey}/master_720p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=854x480,NAME="480p"
-https://trt.daioncdn.net/${channel.channelKey}/master_480p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/${channel.channelKey}/master_480p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,NAME="360p"
-https://trt.daioncdn.net/${channel.channelKey}/master_360p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2`;
+${proxyBase}/${channel.channelKey}/master_360p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2`;
   }
 };
 
