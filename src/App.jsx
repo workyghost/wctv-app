@@ -44,7 +44,8 @@ const PRESET_CHANNELS = [
 
 // Generates virtual master playlist containing all resolutions for ABR
 const getVirtualMasterPlaylist = (channel, sid) => {
-  const proxyBase = 'https://trt.daioncdn.net';
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const proxyBase = `${origin}/trt-proxy`;
   if (channel.channelKey === 'trt-1') {
     return `#EXTM3U
 #EXT-X-VERSION:3
@@ -176,7 +177,8 @@ function App() {
 
     let blobUrl = '';
     const sid = generateRandomSid();
-    const proxyBase = 'https://trt.daioncdn.net';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const proxyBase = `${origin}/trt-proxy`;
 
     if (activeChannel.isDynamic) {
       // Create virtual master playlist Blob to support Adaptive Bitrate
@@ -324,7 +326,8 @@ function App() {
 
       // 2. SELF-PING CONNECTION CHECK (every 8 seconds)
       if (tickCount % 8 === 0) {
-        const proxyBase = 'https://trt.daioncdn.net';
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        const proxyBase = `${origin}/trt-proxy`;
         const pingUrl = activeChannel.isDynamic
           ? `${proxyBase}/${activeChannel.channelKey}/master_1080p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2`
           : activeChannel.url;
