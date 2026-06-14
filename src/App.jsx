@@ -17,8 +17,8 @@ import {
   Menu
 } from 'lucide-react';
 
-// Version 1.3.0 - Premium Minimalist IPTV Dashboard
-const APP_VERSION = "1.3.0";
+// Version 1.4.0 - Premium Minimalist IPTV Dashboard
+const APP_VERSION = "1.4.0";
 const APP_GUID = "ed3904e8-737b-4a5e-856a-1b0d7a0a94e2";
 
 // Helper to generate a dynamic 12-char alphanumeric session ID
@@ -160,13 +160,17 @@ function App() {
   // Effect to monitor viewport dimensions / orientation and trigger auto-fullscreen
   useEffect(() => {
     const checkOrientation = () => {
-      const isCurrentlyLandscape = window.innerWidth > window.innerHeight;
       const isMobile = window.innerWidth <= 960 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-      const landscapeModeActive = isCurrentlyLandscape && isMobile;
       
-      setIsLandscape(landscapeModeActive);
+      if (!isMobile) {
+        setIsLandscape(false);
+        return;
+      }
 
-      if (landscapeModeActive) {
+      const isCurrentlyLandscape = window.innerWidth > window.innerHeight;
+      setIsLandscape(isCurrentlyLandscape);
+
+      if (isCurrentlyLandscape) {
         // Attempt browser native Fullscreen API on the player wrapper
         const playerWrapper = document.querySelector('.player-wrapper');
         if (playerWrapper && !document.fullscreenElement) {
@@ -209,6 +213,7 @@ function App() {
   const lastTimeRef = useRef(0);
   const stallCountRef = useRef(0);
   const autoHealingEnabledRef = useRef(true);
+  const lastChannelIdRef = useRef(activeChannelId);
 
   // Sync auto-healing toggle ref to avoid restarting the player on settings change
   useEffect(() => {
@@ -246,6 +251,9 @@ function App() {
       blobUrl = URL.createObjectURL(blob);
     }
     const streamUrl = activeChannel.isDynamic ? blobUrl : activeChannel.url;
+    const videoEl = videoRef.current;
+    let handleLoadedMetadata = null;
+    let handleVideoError = null;
 
     console.log('Loading Virtual Stream URL:', streamUrl);
 
@@ -259,8 +267,13 @@ function App() {
       clearInterval(diagnosticsIntervalRef.current);
     }
 
-    setAvailableLevels([]);
-    setSelectedLevelIndex('auto');
+    const channelChanged = lastChannelIdRef.current !== activeChannel.id;
+    lastChannelIdRef.current = activeChannel.id;
+
+    if (channelChanged) {
+      setAvailableLevels([]);
+      setSelectedLevelIndex('auto');
+    }
     setHudData(prev => ({ ...prev, status: 'Yükleniyor...', isError: false }));
 
     if (Hls.isSupported()) {
@@ -335,30 +348,64 @@ function App() {
         }
       });
 
-    } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS support (mostly Safari)
+    } else if (videoEl && videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native HLS support (mostly Safari / Mobile)
+      const levels = activeChannel.isDynamic 
+        ? (activeChannel.channelKey === 'trt-1' 
+            ? [
+                { index: 0, name: '1440p (2K)', height: 1440, bitrate: 8000000, suffix: '1440p' },
+                { index: 1, name: '1080p', height: 1080, bitrate: 5000000, suffix: '1080p' },
+                { index: 2, name: '720p', height: 720, bitrate: 3000000, suffix: '720p' },
+                { index: 3, name: '480p', height: 480, bitrate: 1500000, suffix: '480p' },
+                { index: 4, name: '360p', height: 360, bitrate: 800000, suffix: '360p' }
+              ]
+            : [
+                { index: 0, name: '1080p', height: 1080, bitrate: 5000000, suffix: '1080p' },
+                { index: 1, name: '720p', height: 720, bitrate: 3000000, suffix: '720p' },
+                { index: 2, name: '480p', height: 480, bitrate: 1500000, suffix: '480p' },
+                { index: 3, name: '360p', height: 360, bitrate: 800000, suffix: '360p' }
+              ])
+        : [];
+      
+      setAvailableLevels(levels);
+
+      let suffix = '1080p';
+      if (activeChannel.isDynamic && selectedLevelIndex !== 'auto') {
+        const selectedLevel = levels.find(l => l.index === selectedLevelIndex);
+        if (selectedLevel) {
+          suffix = selectedLevel.suffix;
+        }
+      }
+
       const nativeStreamUrl = activeChannel.isDynamic 
-        ? `${proxyBase}/${activeChannel.channelKey}/master_1080p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2`
+        ? `${proxyBase}/${activeChannel.channelKey}/master_${suffix}.m3u8?sid=${sid}&app=${APP_GUID}&ce=2`
         : activeChannel.url;
 
-      videoRef.current.src = nativeStreamUrl;
-      videoRef.current.muted = false; // Start unmuted
-      videoRef.current.addEventListener('loadedmetadata', () => {
-        videoRef.current.play().catch(e => {
+      // Start muted to comply with browser autoplay policies and allow metadata to load
+      videoEl.muted = true;
+      videoEl.src = nativeStreamUrl;
+
+      handleLoadedMetadata = () => {
+        // Try to play unmuted first, fallback to muted if blocked
+        videoEl.muted = false;
+        videoEl.play().catch(e => {
           console.log('Unmuted Safari autoplay blocked, trying muted...', e);
-          videoRef.current.muted = true;
-          videoRef.current.play().catch(err2 => console.log('Muted autoplay blocked:', err2));
+          videoEl.muted = true;
+          videoEl.play().catch(err2 => console.log('Muted autoplay blocked:', err2));
         });
         setHudData(prev => ({ 
           ...prev, 
           status: 'Aktif (Safari Native)', 
-          resolution: `${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`
+          resolution: `${videoEl.videoWidth}x${videoEl.videoHeight}`
         }));
-      });
+      };
 
-      videoRef.current.addEventListener('error', () => {
+      handleVideoError = () => {
         setHudData(prev => ({ ...prev, status: 'Yükleme Hatası (Native)', isError: true }));
-      });
+      };
+
+      videoEl.addEventListener('loadedmetadata', handleLoadedMetadata);
+      videoEl.addEventListener('error', handleVideoError);
     }
 
     // Periodic diagnostics & self-ping collection (Runs for both Hls.js and Native player)
@@ -488,13 +535,26 @@ function App() {
       if (blobUrl) {
         URL.revokeObjectURL(blobUrl);
       }
+      if (videoEl) {
+        if (handleLoadedMetadata) {
+          videoEl.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        }
+        if (handleVideoError) {
+          videoEl.removeEventListener('error', handleVideoError);
+        }
+      }
     };
   }, [activeChannel, latencyMode, reloadTrigger]);
 
   // Adjust quality level override
   const handleQualityChange = (levelIdx) => {
     setSelectedLevelIndex(levelIdx);
-    if (!hlsRef.current) return;
+    if (!hlsRef.current) {
+      // If we are on native player, we must trigger a reload to apply the new stream URL
+      setReloadTrigger(t => t + 1);
+      showToast('Yayın kalitesi güncelleniyor...');
+      return;
+    }
 
     if (levelIdx === 'auto') {
       hlsRef.current.currentLevel = -1; // -1 triggers automatic ABR in Hls.js
@@ -662,6 +722,7 @@ function App() {
             controls
             autoPlay
             playsInline
+            muted
           />
           
           {/* Diagnostics HUD overlay */}

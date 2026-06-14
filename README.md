@@ -8,7 +8,7 @@ WCTV is a premium, high-performance IPTV web client built with React and Vite. I
 
 1. **Self-Healing Stream Engine**: Detects freeze/stall events and automatically recovers the player within 10-12 seconds by generating a fresh session ID (`sid`) and rebuilds the Hls instance.
 2. **Periyodik Bağlantı Kontrolü (Self-Ping)**: Background worker pings the remote manifest every 8 seconds to measure network latency. If a ping failure coincides with a minor buffer stall (>= 5s), it fast-tracks the auto-healing sequence.
-3. **Adaptive Bitrate (ABR) Virtual Playlist**: Generates virtual master playlists on the fly for TRT channels, exposing multiple streams (2K, 1080p, 720p, 480p, 360p) for dynamic stream quality switching.
+3. **Adaptive Bitrate (ABR) Virtual Playlist**: Generates virtual master playlists on the fly for TRT channels, exposing multiple streams (2K, 1080p, 720p, 480p, 360p). On Hls.js supported browsers, it does automatic quality switching. On Safari / mobile native players, it exposes these levels in settings and reloads the manifest on quality selection.
 4. **Latency Modes**: Low Latency (5s buffer), Balanced (15s buffer - Recommended), and Super Stable (30s buffer) playback modes.
 5. **Autoplay Ready**: Fully configured to autoplay instantly upon loading in any modern browser by utilising standard muted autoplay fallback guidelines.
 
@@ -63,9 +63,10 @@ To check the connection health without disrupting video transmission:
 
 ## 🌐 Autoplay Guidelines & Policies
 Modern browsers block autoplaying video elements that contain audio. To guarantee **zero-interaction automatic playback**:
-1. The `<video>` tag is marked with both `autoPlay` and `muted`.
-2. Hls.js loads the source and plays immediately.
-3. Users can unmute the stream at any time using the native player controls.
+1. The `<video>` tag is marked with the `muted` attribute in the DOM, and the native HLS player starts muted.
+2. Hls.js/Native player loads the source and starts playback immediately.
+3. Once playback begins, the player programmatically attempts to unmute itself. If blocked by the browser, it gracefully falls back to muted playback (users can manually unmute via controls at any time).
+4. Desktop browsers support native fullscreen without interruption, as mobile orientation checks are bypassed.
 
 ---
 
