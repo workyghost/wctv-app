@@ -49,27 +49,27 @@ const getVirtualMasterPlaylist = (channel, sid) => {
     return `#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=2560x1440,NAME="1440p"
-${proxyBase}/trt-1/master_1440p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/trt-1/master_1440p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080,NAME="1080p"
-${proxyBase}/trt-1/master_1080p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/trt-1/master_1080p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720,NAME="720p"
-${proxyBase}/trt-1/master_720p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/trt-1/master_720p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=854x480,NAME="480p"
-${proxyBase}/trt-1/master_480p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/trt-1/master_480p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,NAME="360p"
-${proxyBase}/trt-1/master_360p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2`;
+${proxyBase}/trt-1/master_360p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2`;
   } else {
     // Other TRT channels typically cap at 1080p
     return `#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080,NAME="1080p"
-${proxyBase}/${channel.channelKey}/master_1080p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/${channel.channelKey}/master_1080p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720,NAME="720p"
-${proxyBase}/${channel.channelKey}/master_720p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/${channel.channelKey}/master_720p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=854x480,NAME="480p"
-${proxyBase}/${channel.channelKey}/master_480p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2
+${proxyBase}/${channel.channelKey}/master_480p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2
 #EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,NAME="360p"
-${proxyBase}/${channel.channelKey}/master_360p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2`;
+${proxyBase}/${channel.channelKey}/master_360p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2`;
   }
 };
 
@@ -273,7 +273,11 @@ function App() {
 
     } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
       // Native HLS support (mostly Safari)
-      videoRef.current.src = streamUrl;
+      const nativeStreamUrl = activeChannel.isDynamic 
+        ? `${proxyBase}/${activeChannel.channelKey}/master_1080p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2`
+        : activeChannel.url;
+
+      videoRef.current.src = nativeStreamUrl;
       videoRef.current.addEventListener('loadedmetadata', () => {
         videoRef.current.play().catch(e => console.log('Autoplay blocked:', e));
         setHudData(prev => ({ 
@@ -325,7 +329,7 @@ function App() {
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
         const proxyBase = `${origin}/trt-proxy`;
         const pingUrl = activeChannel.isDynamic
-          ? `${proxyBase}/${activeChannel.channelKey}/master_1080p.m3u8?&sid=${sid}&app=${APP_GUID}&ce=2`
+          ? `${proxyBase}/${activeChannel.channelKey}/master_1080p.m3u8?sid=${sid}&app=${APP_GUID}&ce=2`
           : activeChannel.url;
 
         setPingStatus('checking');
