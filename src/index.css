@@ -1226,3 +1226,146 @@ body {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* Mobile Sidebar Backdrop Overlay */
+.sidebar-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 9999;
+  animation: fadeIn 0.25s ease-out;
+}
+
+/* Auto-hide HUD on Inactivity */
+.player-wrapper {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.hud-overlay {
+  transition: opacity 0.4s ease, transform 0.4s ease, visibility 0.4s;
+  visibility: visible;
+  opacity: 1;
+}
+
+.player-wrapper.user-inactive .hud-overlay {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+}
+
+/* Landscape Fullscreen styles for Mobile Devices */
+.player-wrapper.mobile-landscape-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 99999 !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  max-height: none !important;
+  max-width: none !important;
+  background: #000 !important;
+}
+
+.player-wrapper.mobile-landscape-fullscreen .video-element {
+  object-fit: contain !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Immersive Landscape Fullscreen HUD Tweaks */
+.player-wrapper.mobile-landscape-fullscreen .hud-overlay {
+  top: 12px;
+  right: 12px;
+  background: rgba(19, 19, 19, 0.75);
+  padding: 8px 12px;
+  font-size: 10px;
+}
+
+/* Mobile responsive sidebar drawer & layout overrides */
+@media (max-width: 768px) {
+  .app-container {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr !important;
+    height: 100vh !important;
+    position: relative !important;
+  }
+
+  .sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 290px !important;
+    height: 100vh !important;
+    max-height: none !important;
+    z-index: 10000 !important;
+    transform: translateX(-100%) !important;
+    opacity: 0 !important;
+    transition: transform var(--transition-normal), opacity var(--transition-normal) !important;
+    border-right: 1px solid var(--glass-border) !important;
+    border-bottom: none !important;
+    pointer-events: none !important;
+    background: rgba(19, 19, 19, 0.96) !important;
+  }
+
+  .app-container.sidebar-open .sidebar {
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .app-container.sidebar-closed .sidebar {
+    transform: translateX(-100%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  .main-display {
+    padding: 12px !important;
+    height: 100vh !important;
+    gap: 12px !important;
+    overflow-y: auto !important; /* Allow scrolling content (settings/forms) below player */
+  }
+
+  .player-wrapper {
+    aspect-ratio: 16 / 9;
+    flex: none !important;
+    width: 100% !important;
+    border-radius: 16px !important;
+  }
+
+  .header-bar {
+    padding-bottom: 4px;
+  }
+
+  .header-title {
+    font-size: 18px !important;
+  }
+
+  .header-meta {
+    font-size: 10px !important;
+  }
+
+  .header-right .alert-box {
+    display: none !important; /* Hide alert box on header to save horizontal room */
+  }
+
+  .controls-container {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+    margin-top: 8px !important;
+    padding-bottom: 30px !important;
+  }
+
+  .control-card {
+    padding: 16px !important;
+    border-radius: 16px !important;
+  }
+}

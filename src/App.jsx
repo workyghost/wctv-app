@@ -140,6 +140,65 @@ function App() {
   const hlsRef = useRef(null);
   const diagnosticsIntervalRef = useRef(null);
 
+  // Mobile landscape fullscreen state
+  const [isLandscape, setIsLandscape] = useState(false);
+  
+  // User activity overlay auto-hide state
+  const [userActive, setUserActive] = useState(true);
+  const activeTimeoutRef = useRef(null);
+
+  const handlePlayerActivity = () => {
+    setUserActive(true);
+    if (activeTimeoutRef.current) {
+      clearTimeout(activeTimeoutRef.current);
+    }
+    activeTimeoutRef.current = setTimeout(() => {
+      setUserActive(false);
+    }, 3000);
+  };
+
+  // Effect to monitor viewport dimensions / orientation and trigger auto-fullscreen
+  useEffect(() => {
+    const checkOrientation = () => {
+      const isCurrentlyLandscape = window.innerWidth > window.innerHeight;
+      const isMobile = window.innerWidth <= 960 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      const landscapeModeActive = isCurrentlyLandscape && isMobile;
+      
+      setIsLandscape(landscapeModeActive);
+
+      if (landscapeModeActive) {
+        // Attempt browser native Fullscreen API on the player wrapper
+        const playerWrapper = document.querySelector('.player-wrapper');
+        if (playerWrapper && !document.fullscreenElement) {
+          playerWrapper.requestFullscreen?.().catch(err => {
+            console.log('Programmatic native fullscreen blocked (waiting for gesture or fallback active):', err);
+          });
+        }
+      } else {
+        // Exit native fullscreen if we rotate back to portrait
+        if (document.fullscreenElement) {
+          document.exitFullscreen?.().catch(err => {
+            console.log('Failed to exit fullscreen:', err);
+          });
+        }
+      }
+    };
+
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    
+    // Initial check
+    checkOrientation();
+
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
+      if (activeTimeoutRef.current) {
+        clearTimeout(activeTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Auto-healing and self-ping states
   const [autoHealingEnabled, setAutoHealingEnabled] = useState(true);
   const [pingLatency, setPingLatency] = useState(null);
@@ -481,6 +540,9 @@ function App() {
 
   return (
     <div className={`app-container ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+      {sidebarOpen && (
+        <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
+      )}
       {/* Sidebar Panel */}
       <aside className="sidebar">
         <div className="sidebar-header">
@@ -579,7 +641,11 @@ function App() {
         </header>
 
         {/* Video Player Display */}
-        <div className="player-wrapper">
+        <div 
+          className={`player-wrapper ${isLandscape ? 'mobile-landscape-fullscreen' : ''} ${!userActive ? 'user-inactive' : ''}`}
+          onMouseMove={handlePlayerActivity}
+          onTouchStart={handlePlayerActivity}
+        >
           <video 
             ref={videoRef} 
             className="video-element"
