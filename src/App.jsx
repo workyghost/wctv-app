@@ -68,7 +68,8 @@ const PRESET_CHANNELS = [
 
 // Generates virtual master playlist containing all resolutions for ABR
 const getVirtualMasterPlaylist = (channel, sid) => {
-  const proxyBase = '/trt-proxy';
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const proxyBase = `${origin}/trt-proxy`;
   if (channel.channelKey === 'trt-1') {
     return `#EXTM3U
 #EXT-X-VERSION:3
