@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node diagnose.js && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "vite preview --host --port 3000"
