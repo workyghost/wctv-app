@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Hls from 'hls.js';
 import { 
-  Play, 
   Plus, 
   Trash2, 
   Info, 
@@ -12,11 +11,13 @@ import {
   Sliders, 
   AlertTriangle,
   Clock,
-  Gauge,
-  RefreshCw
+  RefreshCw,
+  Settings,
+  X,
+  Menu
 } from 'lucide-react';
 
-// Version 1.1.8 - Default autoplay ready with muted state
+// Version 1.2.0 - Premium Minimalist IPTV Dashboard
 const APP_GUID = "ed3904e8-737b-4a5e-856a-1b0d7a0a94e2";
 
 // Helper to generate a dynamic 12-char alphanumeric session ID
@@ -29,7 +30,7 @@ const generateRandomSid = () => {
   return sid;
 };
 
-// Preset channels
+// Preset channels (TRT 1 only as requested)
 const PRESET_CHANNELS = [
   {
     id: 'trt-1-dynamic',
@@ -37,34 +38,6 @@ const PRESET_CHANNELS = [
     isDynamic: true,
     channelKey: 'trt-1',
     description: 'Resmi tabii.com 2K/1440p Ultra HD Canlı Yayın Akışı'
-  },
-  {
-    id: 'trt-spor-dynamic',
-    name: 'TRT Spor (Dynamic 1080p)',
-    isDynamic: true,
-    channelKey: 'trt-spor',
-    description: 'Resmi tabii.com 1080p Full HD Spor Canlı Yayın Akışı'
-  },
-  {
-    id: 'trt-spor-yildiz-dynamic',
-    name: 'TRT Spor Yıldız (Dynamic 1080p)',
-    isDynamic: true,
-    channelKey: 'trt-spor-yildiz',
-    description: 'Resmi tabii.com 1080p Canlı Alternatif Spor Akışı'
-  },
-  {
-    id: 'trt-haber-dynamic',
-    name: 'TRT Haber (Dynamic 1080p)',
-    isDynamic: true,
-    channelKey: 'trt-haber',
-    description: 'Resmi tabii.com 1080p Canlı Haber Akışı'
-  },
-  {
-    id: 'trt-belgesel-dynamic',
-    name: 'TRT Belgesel (Dynamic 1080p)',
-    isDynamic: true,
-    channelKey: 'trt-belgesel',
-    description: 'Resmi tabii.com 1080p Canlı Belgesel Akışı'
   }
 ];
 
@@ -106,11 +79,15 @@ function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Clean up BBC channels from saved storage
+        // Clean up legacy channels and old presets
         const filteredSaved = parsed.filter(c => 
           !c.id.startsWith('bbc') && 
           !c.id.startsWith('cbbc') && 
-          !c.id.startsWith('cbeebies')
+          !c.id.startsWith('cbeebies') &&
+          c.id !== 'trt-spor-dynamic' &&
+          c.id !== 'trt-spor-yildiz-dynamic' &&
+          c.id !== 'trt-haber-dynamic' &&
+          c.id !== 'trt-belgesel-dynamic'
         );
         // Merge preset channels and user custom channels
         const merged = [...PRESET_CHANNELS];
@@ -130,6 +107,10 @@ function App() {
   const [activeChannelId, setActiveChannelId] = useState(() => {
     return channels[0]?.id || 'trt-1-dynamic';
   });
+
+  // UI state toggles
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Default collapsed for large TV look
+  const [showSettings, setShowSettings] = useState(false);
 
   // 'auto' or levels discovered dynamically (e.g. index number: 0, 1, 2)
   const [selectedLevelIndex, setSelectedLevelIndex] = useState('auto');
@@ -193,7 +174,6 @@ function App() {
   useEffect(() => {
     if (!videoRef.current || !activeChannel) return;
 
-    let streamUrl = '';
     let blobUrl = '';
     const sid = generateRandomSid();
 
@@ -202,10 +182,8 @@ function App() {
       const m3u8Content = getVirtualMasterPlaylist(activeChannel, sid);
       const blob = new Blob([m3u8Content], { type: 'application/x-mpegURL' });
       blobUrl = URL.createObjectURL(blob);
-      streamUrl = blobUrl;
-    } else {
-      streamUrl = activeChannel.url;
     }
+    const streamUrl = activeChannel.isDynamic ? blobUrl : activeChannel.url;
 
     console.log('Loading Virtual Stream URL:', streamUrl);
 
@@ -254,7 +232,7 @@ function App() {
       hls.loadSource(streamUrl);
       hls.attachMedia(videoRef.current);
 
-      hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
         // Discover available quality levels from virtual master playlist
         const discovered = hls.levels.map((level, index) => ({
           index,
@@ -274,7 +252,7 @@ function App() {
         setHudData(prev => ({ ...prev, status: 'Aktif' }));
       });
 
-      hls.on(Hls.Events.ERROR, (event, data) => {
+      hls.on(Hls.Events.ERROR, (_, data) => {
         if (data.fatal) {
           setHudData(prev => ({ ...prev, status: `Hata: ${data.details}`, isError: true }));
           switch (data.type) {
@@ -305,7 +283,7 @@ function App() {
         }));
       });
 
-      videoRef.current.addEventListener('error', (e) => {
+      videoRef.current.addEventListener('error', () => {
         setHudData(prev => ({ ...prev, status: 'Yükleme Hatası (Native)', isError: true }));
       });
     }
@@ -321,14 +299,13 @@ function App() {
       tickCount++;
 
       // 1. STALL & AUTO-HEAL CHECK (every second)
-      // Check if video is playing (i.e. is not paused, not ended, and has readyState >= 2)
       if (video.readyState >= 2 && !video.paused && !video.ended) {
         if (video.currentTime === lastTimeRef.current) {
           stallCountRef.current += 1;
           
           if (autoHealingEnabledRef.current && stallCountRef.current >= 12) {
             console.log('[Stream Monitor] Stall limit reached (12s). Initiating Auto-Heal...');
-            showToast('Yayın donması algılandı! Donma koruması yayını otomatik olarak tazeliyor...');
+            showToast('Yayın donması algılandı! Donma koruması yayını otomatik olarak tazeleniyor...');
             setReloadCount(r => r + 1);
             setReloadTrigger(t => t + 1);
             stallCountRef.current = 0;
@@ -339,7 +316,6 @@ function App() {
           stallCountRef.current = 0;
         }
       } else {
-        // Reset stall counter if paused, ended, or not ready
         stallCountRef.current = 0;
         lastTimeRef.current = video.currentTime;
       }
@@ -440,7 +416,7 @@ function App() {
         URL.revokeObjectURL(blobUrl);
       }
     };
-  }, [activeChannelId, latencyMode, reloadTrigger]);
+  }, [activeChannel, latencyMode, reloadTrigger]);
 
   // Adjust quality level override
   const handleQualityChange = (levelIdx) => {
@@ -449,12 +425,12 @@ function App() {
 
     if (levelIdx === 'auto') {
       hlsRef.current.currentLevel = -1; // -1 triggers automatic ABR in Hls.js
-      showToast('Kalite ayarı "Otomatik (Adaptif)" olarak güncellendi. Ağ hızınıza göre ayarlanacaktır.');
+      showToast('Kalite ayarı "Otomatik (Adaptif)" olarak güncellendi.');
     } else {
       hlsRef.current.currentLevel = levelIdx; // Set Hls.js level directly
       const lvl = hlsRef.current.levels[levelIdx];
       const name = lvl ? (lvl.name || `${lvl.height}p`) : 'Seçilen';
-      showToast(`Yayın kalitesi kesin olarak ${name} değerine kilitlendi.`);
+      showToast(`Yayın kalitesi ${name} değerine kilitlendi.`);
     }
   };
 
@@ -482,6 +458,7 @@ function App() {
     setCustomName('');
     setCustomUrl('');
     showToast('Yeni kanal başarıyla eklendi!');
+    setShowSettings(false); // Close settings for direct watching
   };
 
   // Handle channel delete
@@ -499,12 +476,12 @@ function App() {
   };
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
       {/* Sidebar Panel */}
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="logo-glow">
-            <Tv className="primary-color" size={20} color="white" />
+            <Tv size={20} color="white" />
           </div>
           <div>
             <h1 className="logo-title">WCTV IPTV</h1>
@@ -513,7 +490,6 @@ function App() {
         </div>
 
         <div className="sidebar-content">
-          {/* Channel Select Section */}
           <div>
             <div className="section-title">
               <span>Yayın Kanalları</span>
@@ -551,65 +527,50 @@ function App() {
               })}
             </div>
           </div>
-
-          {/* Add Custom Channel Section */}
-          <div>
-            <div className="section-title">
-              <span>Özel Yayın Ekle</span>
-              <Plus size={14} />
-            </div>
-            <form onSubmit={handleAddChannel} className="custom-form">
-              <div className="input-group">
-                <label className="input-label">Kanal Adı</label>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  placeholder="Örn: TRT 4K veya Benim Kanalım"
-                  value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
-                />
-              </div>
-              <div className="input-group">
-                <label className="input-label">M3U8 Stream URL</label>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  placeholder="https://example.com/live/stream.m3u8"
-                  value={customUrl}
-                  onChange={(e) => setCustomUrl(e.target.value)}
-                />
-              </div>
-              <button type="submit" className="submit-btn">
-                <Plus size={16} />
-                Listeye Ekle
-              </button>
-            </form>
-          </div>
         </div>
       </aside>
 
       {/* Main Stream Window */}
       <main className="main-display">
         <header className="header-bar">
-          <div className="header-title-section">
-            <h2 className="header-title">{activeChannel?.name}</h2>
-            <div className="header-meta">
-              <span className="header-badge-live">Canlı</span>
-              <span className="header-status">
-                <Wifi size={14} />
-                {activeChannel?.isDynamic ? 'Premium CDN Bağlantısı (ABR Aktif)' : 'Harici IPTV Akışı'}
-              </span>
+          <div className="header-left">
+            <button 
+              className={`menu-toggle-btn ${sidebarOpen ? 'active' : ''}`}
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              title="Kanalları Göster/Gizle"
+            >
+              <Menu size={20} />
+            </button>
+            
+            <div className="header-title-section">
+              <h2 className="header-title">{activeChannel?.name}</h2>
+              <div className="header-meta">
+                <span className="header-badge-live">Canlı</span>
+                <span className="header-status">
+                  <Wifi size={14} />
+                  {activeChannel?.isDynamic ? 'Premium CDN Bağlantısı (ABR Aktif)' : 'Harici Akış'}
+                </span>
+              </div>
             </div>
           </div>
-          <div>
+
+          <div className="header-right">
             <div className="alert-box flex-align-center">
               <ShieldCheck className="alert-icon" size={16} />
-              <span>Sanal Master Playlist & Donma Önleyici aktif.</span>
+              <span>Donma Koruması Aktif</span>
               <span className={`header-ping-badge ${pingStatus}`}>
                 <span className="ping-badge-dot"></span>
                 <span>{pingStatus === 'healthy' ? `${pingLatency} ms` : pingStatus === 'checking' ? 'Ölçülüyor...' : 'Kesinti'}</span>
               </span>
             </div>
+            
+            <button 
+              className="settings-toggle-btn"
+              onClick={() => setShowSettings(true)}
+              title="Ayarlar"
+            >
+              <Settings size={20} className="settings-gear" />
+            </button>
           </div>
         </header>
 
@@ -642,17 +603,17 @@ function App() {
               <span className="hud-value">{hudData.bitrate}</span>
             </div>
             <div className="hud-item">
-              <span className="hud-label">Tampon Bellek:</span>
+              <span className="hud-label">Tampon:</span>
               <span className="hud-value" style={{ color: parseFloat(hudData.buffer) < 5 ? '#ef4444' : '#10b981' }}>
                 {hudData.buffer}
               </span>
             </div>
             <div className="hud-item">
-              <span className="hud-label">FPS/Gecikme:</span>
+              <span className="hud-label">FPS/Mod:</span>
               <span className="hud-value">{hudData.fps} FPS ({hudData.latencyModeName})</span>
             </div>
             <div className="hud-item">
-              <span className="hud-label">Ping / Kurtarma:</span>
+              <span className="hud-label">Sinyal:</span>
               <span className="hud-value" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span className={`hud-status-dot ${pingStatus}`}></span>
                 {pingStatus === 'healthy' ? `${pingLatency} ms` : pingStatus === 'checking' ? 'Ölçülüyor' : 'Kesinti'} 
@@ -661,25 +622,41 @@ function App() {
             </div>
           </div>
         </div>
+      </main>
 
-        {/* Dynamic Controls Grid */}
-        <div className="controls-container">
-          {/* Quality Panel */}
-          <div className="control-card">
-            <h3 className="card-title">
-              <Sliders size={18} className="primary-color" />
-              Yayın Kalitesi Ayarı
-            </h3>
+      {/* Settings Modal/Drawer Overlay */}
+      {showSettings && (
+        <div className="settings-drawer-backdrop" onClick={() => setShowSettings(false)} />
+      )}
+      
+      <div className={`settings-drawer ${showSettings ? 'open' : ''}`}>
+        <div className="settings-drawer-header">
+          <h3 className="settings-drawer-title">
+            <Settings size={20} className="settings-title-icon-spin" />
+            Yayın ve Oynatıcı Ayarları
+          </h3>
+          <button className="settings-close-btn" onClick={() => setShowSettings(false)}>
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="settings-drawer-body">
+          {/* 1. Quality selection grid */}
+          <div className="settings-section">
+            <h4 className="settings-section-title">
+              <Sliders size={16} />
+              Yayın Kalitesi (ABR)
+            </h4>
             
             {availableLevels.length > 0 ? (
               <>
-                <div className="quality-grid">
+                <div className="settings-quality-grid">
                   <button
                     className={`quality-btn ${selectedLevelIndex === 'auto' ? 'active' : ''}`}
                     onClick={() => handleQualityChange('auto')}
                   >
                     <span className="quality-label">Otomatik</span>
-                    <span className="quality-desc">Adaptif ABR Entegrasyonu</span>
+                    <span className="quality-desc">Adaptif Akış</span>
                   </button>
 
                   {availableLevels.map((level) => {
@@ -692,76 +669,71 @@ function App() {
                       >
                         <span className="quality-label">{is2K ? '1440p (2K)' : `${level.height}p`}</span>
                         <span className="quality-desc">
-                          {(level.bitrate / 1000000).toFixed(1)} Mbps Sabit
+                          {(level.bitrate / 1000000).toFixed(1)} Mbps
                         </span>
                       </button>
                     );
                   })}
                 </div>
-                <div className="alert-box">
-                  <Info className="alert-icon" size={16} />
+                <div className="settings-info-box">
+                  <Info className="info-icon" size={14} />
                   <span>
-                    Bant genişliğiniz düşerse <strong>Otomatik</strong> mod yayının takılmasını önlemek için anlık kaliteyi düşürür. 
-                    Maçın en net halinde kalması için <strong>1440p (2K)</strong> veya <strong>1080p</strong> kalitelerini manuel sabitleyebilirsiniz.
+                    Bant genişliğiniz düşerse <strong>Otomatik</strong> mod takılmayı önler. Sabit en net görüntü için <strong>1440p (2K)</strong> veya <strong>1080p</strong> kalitelerini seçebilirsiniz.
                   </span>
                 </div>
               </>
             ) : (
-              <div className="alert-box" style={{ background: 'rgba(245, 158, 11, 0.08)', borderColor: 'rgba(245, 158, 11, 0.3)' }}>
-                <AlertTriangle className="alert-icon" size={16} style={{ color: '#f59e0b' }} />
-                <span style={{ color: '#f59e0b' }}>
+              <div className="settings-info-box warning">
+                <AlertTriangle className="info-icon" size={14} />
+                <span>
                   Özel IPTV akışlarında tekil manifest varsa kalite seçimi otomatik belirlenir. Çoklu kalite varsa oynatıcı otomatik listeleyecektir.
                 </span>
               </div>
             )}
           </div>
 
-          {/* Latency & Buffer Modes Card */}
-          <div className="control-card">
-            <h3 className="card-title">
-              <Clock size={18} className="primary-color" />
-              Gecikme & Donma Engelleme Modu
-            </h3>
-            <div className="quality-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', marginBottom: '16px' }}>
+          {/* 2. Latency mode selection */}
+          <div className="settings-section">
+            <h4 className="settings-section-title">
+              <Clock size={16} />
+              Gecikme & Donma Engelleme
+            </h4>
+            <div className="settings-latency-grid">
               {[
-                { key: 'low', label: 'Düşük Gecikme', desc: '5s Gecikme (Riskli)' },
+                { key: 'low', label: 'Düşük Gecikme', desc: '5s Tampon (Riskli)' },
                 { key: 'balanced', label: 'Dengeli', desc: '15s Tampon (Önerilen)' },
                 { key: 'stable', label: 'Süper Stabil', desc: '30s Tampon (Sıfır Donma)' }
               ].map((mode) => (
                 <button
                   key={mode.key}
-                  className={`quality-btn ${latencyMode === mode.key ? 'active' : ''}`}
+                  className={`latency-btn ${latencyMode === mode.key ? 'active' : ''}`}
                   onClick={() => {
                     setLatencyMode(mode.key);
                     showToast(`Oynatma modu: ${mode.label} olarak değiştirildi. Yayın yeniden yükleniyor...`);
                   }}
                 >
-                  <span className="quality-label" style={{ fontSize: '13px' }}>{mode.label}</span>
-                  <span className="quality-desc">{mode.desc}</span>
+                  <span className="latency-label">{mode.label}</span>
+                  <span className="latency-desc">{mode.desc}</span>
                 </button>
               ))}
             </div>
-            <div className="details-list">
-              <div className="detail-item">
-                <span className="detail-label">🎯 Maç Canlı Yayın Önerisi:</span>
-                <span className="detail-desc">
-                  TRT segmentleri 10 saniye olduğu için donmaları önlemek amacıyla en az 15 saniyelik 
-                  <strong> Dengeli</strong> veya <strong> Süper Stabil</strong> mod kullanılması şiddetle tavsiye edilir.
-                </span>
-              </div>
+            <div className="settings-info-box">
+              <Info className="info-icon" size={14} />
+              <span>
+                TRT segmentleri 10 saniye olduğu için donmaları önlemek amacıyla en az 15 saniyelik <strong>Dengeli</strong> veya <strong>Süper Stabil</strong> mod kullanılması önerilir.
+              </span>
             </div>
           </div>
 
-          {/* Self-Healing & Ping Monitor Card */}
-          <div className="control-card">
-            <h3 className="card-title">
-              <Activity size={18} className="primary-color" style={{ animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }} />
-              Donma Koruması & Bağlantı
-            </h3>
-            
-            <div className="self-healing-stats">
+          {/* 3. Self-healing stats and settings */}
+          <div className="settings-section">
+            <h4 className="settings-section-title">
+              <Activity size={16} />
+              Donma Koruması & Kurtarma
+            </h4>
+            <div className="settings-healing-stats">
               <div className="status-item">
-                <span className="status-label">Bağlantı Gecikmesi:</span>
+                <span className="status-label">Bağlantı Sinyali:</span>
                 <span className="status-value-group">
                   <span className={`ping-indicator-dot ${pingStatus}`}></span>
                   <span className="status-val font-mono">
@@ -770,36 +742,35 @@ function App() {
                       : pingStatus === 'checking' 
                       ? 'Ölçülüyor...' 
                       : pingStatus === 'error'
-                      ? 'Bağlantı Sorunu'
+                      ? 'Bağlantı Kesik'
                       : 'Pasif'}
                   </span>
                 </span>
               </div>
               <div className="status-item">
-                <span className="status-label">Donma Koruması:</span>
+                <span className="status-label">Kendi Kendine İyileştirme:</span>
                 <span className="status-val" style={{ color: autoHealingEnabled ? '#10b981' : '#af8782', fontWeight: 600 }}>
                   {autoHealingEnabled ? 'Aktif (Otomatik)' : 'Pasif'}
                 </span>
               </div>
               <div className="status-item">
-                <span className="status-label">Otomatik Kurtarma:</span>
+                <span className="status-label">Kurtarma Sayacı:</span>
                 <span className="status-val" style={{ fontWeight: 600 }}>
                   {reloadCount > 0 ? (
                     <span className="reload-badge danger">{reloadCount} Kez Kurtarıldı</span>
                   ) : (
-                    <span className="reload-badge success">Sorunsuz Çalışma</span>
+                    <span className="reload-badge success">Sorunsuz</span>
                   )}
                 </span>
               </div>
             </div>
-
             <div className="self-healing-actions">
               <button 
                 type="button"
                 className={`action-btn-toggle ${autoHealingEnabled ? 'active' : ''}`}
                 onClick={() => {
                   setAutoHealingEnabled(!autoHealingEnabled);
-                  showToast(autoHealingEnabled ? 'Otomatik donma koruması devre dışı bırakıldı.' : 'Otomatik donma koruması aktif hale getirildi.');
+                  showToast(autoHealingEnabled ? 'Otomatik donma koruması devre dışı bırakıldı.' : 'Otomatik donma koruması aktif.');
                 }}
               >
                 {autoHealingEnabled ? 'Korumayı Durdur' : 'Korumayı Başlat'}
@@ -812,22 +783,49 @@ function App() {
                   showToast('Yayın bağlantısı manuel olarak tazeleniyor...');
                   setReloadTrigger(t => t + 1);
                 }}
-                title="Yeni bir oturum açarak yayını yeniden başlatır"
+                title="Yayını yeniler"
               >
                 <RefreshCw size={13} className="reconnect-icon" />
                 Yeniden Bağlan
               </button>
             </div>
-            
-            <div className="alert-box" style={{ marginTop: '14px', background: 'rgba(227, 10, 23, 0.04)', borderColor: 'rgba(227, 10, 23, 0.15)' }}>
-              <ShieldCheck className="alert-icon animate-pulse" size={16} />
-              <span style={{ fontSize: '12.5px', lineHeight: '1.4' }}>
-                Yayın donarsa oynatıcı arka planda yeni bir <strong>sid (Oturum ID)</strong> üreterek yayını 10-12 saniye içinde otomatik kurtarır.
-              </span>
-            </div>
+          </div>
+
+          {/* 4. Add Custom Channel form */}
+          <div className="settings-section">
+            <h4 className="settings-section-title">
+              <Plus size={16} />
+              Özel Yayın Ekle (M3U8)
+            </h4>
+            <form onSubmit={handleAddChannel} className="custom-form">
+              <div className="input-group">
+                <label className="input-label">Kanal Adı</label>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Örn: TRT 4K veya Alternatif Spor"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                />
+              </div>
+              <div className="input-group">
+                <label className="input-label">M3U8 Stream URL</label>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="https://example.com/live/stream.m3u8"
+                  value={customUrl}
+                  onChange={(e) => setCustomUrl(e.target.value)}
+                />
+              </div>
+              <button type="submit" className="submit-btn">
+                <Plus size={16} />
+                Listeye Kanal Ekle
+              </button>
+            </form>
           </div>
         </div>
-      </main>
+      </div>
 
       {/* Toast Alert */}
       {toast && (
